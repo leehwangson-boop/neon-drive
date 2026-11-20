@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEON DRIVE</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 28px 16px;
+      display: grid;
+      place-items: center;
+      font-family: "Malgun Gothic", sans-serif;
+      color: #edf6ff;
+      background: radial-gradient(circle at top, #173449, #090e18 65%);
+    }
+
+    .arcade { width: 360px; }
+
+    .title-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      letter-spacing: 3px;
+    }
+
+    .subtitle {
+      margin: 8px 0 18px;
+      color: #97abc0;
+      font-size: 13px;
+    }
+
+    /* 게임 화면 크기 */
+    .road {
+      position: relative;
+      width: 360px;
+      height: 600px;
+      overflow: hidden;
+      border-radius: 16px;
+      background: linear-gradient(90deg, #1c2533, #263244 50%, #1c2533);
+      outline: 1px solid #3b4b60;
+      box-shadow: 0 20px 50px #0008, 0 0 28px #46e7ed12;
+    }
+
+    .road::before, .road::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: #65e7ed;
+      box-shadow: 0 0 12px #65e7ed66;
+    }
+
+    .road::before { left: 8px; }
+    .road::after { right: 8px; }
+
+    /* 선 32px + 빈칸 32px를 반복합니다. */
+    .lane-line {
+      position: absolute;
+      top: 0;
+      width: 4px;
+      height: 100%;
+      transform: translateX(-50%);
+      background: repeating-linear-gradient(
+        to bottom,
+        #dce7f0 0px,
+        #dce7f0 32px,
+        transparent 32px,
+        transparent 64px
+      );
+      background-size: 100% 64px;
+      background-repeat: repeat-y;
+      background-position: 0 0;
+      opacity: 0.65;
+    }
+
+    .line-left { left: calc(100% / 3); }
+    .line-right { left: calc(100% * 2 / 3); }
+
+    .player {
+      position: absolute;
+      left: 50%;
+      bottom: 32px;
+      width: 64px;
+      height: 112px;
+      transform: translateX(-50%);
+      filter: drop-shadow(0 8px 8px #0008);
+    }
+
+    .enemy {
+      position: absolute;
+      top: 0;
+      width: 64px;
+      height: 112px;
+      transform: translateX(-50%) rotate(180deg);
+      filter: drop-shadow(0 8px 8px #0008);
+    }
+
+    /* 충돌 순간 게임 화면만 살짝 흔듭니다. */
+    .road.is-crashing {
+      animation: crash-shake var(--crash-duration, 300ms) ease-in-out;
+    }
+
+    @keyframes crash-shake {
+      0%, 100% { transform: translate(0, 0); }
+      20% { transform: translate(-4px, 1px); }
+      40% { transform: translate(4px, -1px); }
+      60% { transform: translate(-3px, 1px); }
+      80% { transform: translate(3px, 0); }
+    }
+
+    .player.is-hit {
+      z-index: 3;
+      filter: drop-shadow(0 0 6px #ff657a)
+              drop-shadow(0 0 16px #ff315fcc);
+    }
+
+    .score-board {
+      position: absolute;
+      top: 14px;
+      left: 20px;
+      z-index: 5;
+      padding: 8px 12px;
+      border: 1px solid #49637e;
+      border-radius: 10px;
+      background: #0b1222d9;
+      color: #edf6ff;
+      font-size: 16px;
+      font-weight: bold;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .start-screen,
+    .game-over {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      display: grid;
+      place-items: center;
+      background: #070c18b3;
+      color: #ffffff;
+      font-size: 36px;
+      font-weight: bold;
+      text-shadow: 0 0 18px #ff647d80;
+    }
+
+    .start-screen[hidden],
+    .game-over[hidden] {
+      display: none;
+    }
+
+    .start-screen-content,
+    .game-over-content {
+      text-align: center;
+    }
+
+    .final-score {
+      margin: 12px 0 0;
+      color: #75edec;
+      font-size: 20px;
+      font-weight: normal;
+    }
+
+    .screen-guide {
+      margin: 14px 0 0;
+      color: #b3c7dd;
+      font-size: 14px;
+      font-weight: normal;
+      line-height: 1.6;
+      text-shadow: none;
+    }
+
+    .action-button {
+      margin-top: 24px;
+      min-width: 140px;
+      padding: 12px 24px;
+      border: 1px solid #98fbff;
+      border-radius: 10px;
+      background: #65e7ed;
+      color: #0c2030;
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 6px 20px #65e7ed26;
+    }
+
+    .action-button:hover:not(:disabled) {
+      background: #a1f6f7;
+    }
+
+    .action-button:focus-visible {
+      outline: 3px solid #ffffff;
+      outline-offset: 4px;
+    }
+
+    .action-button:disabled {
+      cursor: default;
+      opacity: 0.6;
+    }
+
+    .caption {
+      margin: 14px 0 0;
+      text-align: center;
+      color: #97abc0;
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="arcade">
+    <header class="title-bar">
+      <h1>NEON DRIVE</h1>
+    </header>
+    <p class="subtitle">3차선 자동차 레이싱</p>
+
+    <div class="road" id="game" tabindex="-1"
+         role="region" aria-label="3차선 게임 화면">
+
+      <div class="score-board" id="score-board">점수: 0</div>
+
+      <div class="lane-line line-left" aria-hidden="true"></div>
+      <div class="lane-line line-right" aria-hidden="true"></div>
+
+      <!-- 플레이어 자동차 -->
+      <svg class="player" id="player" viewBox="0 0 80 140"
+           xmlns="http://www.w3.org/2000/svg"
+           role="img" aria-labelledby="car-title">
+        <title id="car-title">위쪽을 향하는 파란색 플레이어 자동차</title>
+
+        <defs>
+          <linearGradient id="body-color" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#127dcc"/>
+            <stop offset="50%" stop-color="#59d5ff"/>
+            <stop offset="100%" stop-color="#127dcc"/>
+          </linearGradient>
+        </defs>
+
+        <!-- 바퀴 -->
+        <g fill="#080e18" stroke="#405166" stroke-width="1.5">
+          <rect x="4" y="28" width="12" height="26" rx="4"/>
+          <rect x="64" y="28" width="12" height="26" rx="4"/>
+          <rect x="4" y="91" width="12" height="26" rx="4"/>
+          <rect x="64" y="91" width="12" height="26" rx="4"/>
+        </g>
+
+        <!-- 차체와 사이드미러 -->
+        <rect x="14" y="6" width="52" height="128" rx="18"
+              fill="url(#body-color)" stroke="#8be6ff" stroke-width="1.5"/>
+
+        <g fill="#3ab5ed">
+          <rect x="7" y="56" width="10" height="8" rx="3"/>
+          <rect x="63" y="56" width="10" height="8" rx="3"/>
+        </g>
+
+        <!-- 창문과 지붕 -->
+        <path d="M22 35 Q40 27 58 35 L55 55 H25 Z"
+              fill="#102c45" stroke="#a2edff" stroke-width="1.5"/>
+        <path d="M27 38 L35 35 L31 51 H27 Z"
+              fill="#ffffff" opacity="0.25"/>
+        <rect x="25" y="61" width="30" height="25" rx="5" fill="#79dfff"/>
+        <path d="M25 93 H55 L58 110 Q40 117 22 110 Z"
+              fill="#102c45" stroke="#a2edff" stroke-width="1.5"/>
+
+        <!-- 전조등과 후미등 -->
+        <g fill="#f2ffff">
+          <rect x="20" y="17" width="11" height="7" rx="3"/>
+          <rect x="49" y="17" width="11" height="7" rx="3"/>
+        </g>
+        <g fill="#ff647d">
+          <rect x="20" y="121" width="11" height="5" rx="2"/>
+          <rect x="49" y="121" width="11" height="5" rx="2"/>
+        </g>
+      </svg>
+
+      <div class="start-screen" id="start-screen">
+        <div class="start-screen-content">
+          <div>게임 준비</div>
+          <p class="screen-guide">← · → 방향키로 차량을 피하세요.</p>
+          <button class="action-button" id="start-button" type="button">
+            시작
+          </button>
+        </div>
+      </div>
+
+      <div class="game-over" id="game-over"
+           hidden role="status" aria-live="polite">
+        <div class="game-over-content">
+          <div>게임 종료</div>
+          <p class="final-score" id="final-score">최종 점수: 0</p>
+          <button class="action-button" id="restart-button"
+                  type="button" disabled>
+            다시 시작
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <p class="caption">← · → 방향키로 한 차선씩 이동</p>
+  </main>
+
+  <!-- 다른 차량을 생성할 때 복제하는 SVG 원본 -->
+  <template id="enemy-template">
+    <svg class="enemy" viewBox="0 0 80 140"
+         xmlns="http://www.w3.org/2000/svg"
+         role="img" aria-label="빨간색 다른 차량">
+
+      <g fill="#080e18" stroke="#405166" stroke-width="1.5">
+        <rect x="4" y="28" width="12" height="26" rx="4"/>
+        <rect x="64" y="28" width="12" height="26" rx="4"/>
+        <rect x="4" y="91" width="12" height="26" rx="4"/>
+        <rect x="64" y="91" width="12" height="26" rx="4"/>
+      </g>
+
+      <rect x="14" y="6" width="52" height="128" rx="18"
+            fill="#ed5773" stroke="#ffb6c7" stroke-width="1.5"/>
+
+      <g fill="#ff748d">
+        <rect x="7" y="56" width="10" height="8" rx="3"/>
+        <rect x="63" y="56" width="10" height="8" rx="3"/>
+      </g>
+
+      <path d="M22 35 Q40 27 58 35 L55 55 H25 Z"
+            fill="#3e2030" stroke="#ffd0da" stroke-width="1.5"/>
+      <rect x="25" y="61" width="30" height="25" rx="5" fill="#ff9eb1"/>
+      <path d="M25 93 H55 L58 110 Q40 117 22 110 Z"
+            fill="#3e2030" stroke="#ffd0da" stroke-width="1.5"/>
+
+      <g fill="#f2ffff">
+        <rect x="20" y="17" width="11" height="7" rx="3"/>
+        <rect x="49" y="17" width="11" height="7" rx="3"/>
+      </g>
+      <g fill="#ff354d">
+        <rect x="20" y="121" width="11" height="5" rx="2"/>
+        <rect x="49" y="121" width="11" height="5" rx="2"/>
+      </g>
+    </svg>
+  </template>
+
+  <script>
+    const game = document.getElementById("game");
+    const player = document.getElementById("player");
+    const gameOverMessage = document.getElementById("game-over");
+    const scoreBoard = document.getElementById("score-board");
+    const finalScoreText = document.getElementById("final-score");
+
+    const startScreen = document.getElementById("start-screen");
+    const startButton = document.getElementById("start-button");
+    const restartButton = document.getElementById("restart-button");
+    const laneLines = document.querySelectorAll(".lane-line");
+
+    const laneCount = 3;
+    let currentLane = 1;
+
+    const enemyTemplate = document.getElementById("enemy-template");
+
+    /* 차량 생성과 안전거리 설정 */
+    const spawnInterval = 3; // 최소 생성 간격: 초
+    const enemyHeight = 112; // CSS .enemy 높이와 동일
+    const playerHeight = 112; // CSS .player 높이와 동일
+    const safetyMargin = 64; // 플레이어 길이 외에 추가할 회피 여유
+
+    // 차량 윗부분끼리 최소 288px를 띄웁니다.
+    const minSpawnDistance =
+      enemyHeight + playerHeight + safetyMargin;
+
+    const enemies = [];
+
+    /* 차량과 도로가 함께 사용하는 속도 설정 */
+    const baseSpeed = 120;
+    const speedIncrease = 20;
+    const pointsPerLevel = 5;
+    const maxSpeed = 240;
+    let currentSpeed = baseSpeed;
+
+    const roadPatternHeight = 64;
+    let roadOffset = 0;
+
+    const crashDuration = 300;
+    let crashTimerId = null;
+
+    let spawnElapsed = 0;
+    let previousTime = null;
+
+    // waiting: 대기, playing: 진행
+    // crashing: 충돌 연출 중, gameover: 종료
+    let gameState = "waiting";
+    let animationId = null;
+    let score = 0;
+
+    function resetGame() {
+      if (animationId !== null) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+
+      // 이전 충돌 효과와 타이머를 제거합니다.
+      clearCrashEffect();
+
+      for (const enemy of enemies) {
+        enemy.element.remove();
+      }
+      enemies.length = 0;
+
+      score = 0;
+      currentLane = 1;
+      spawnElapsed = 0;
+      previousTime = null;
+      roadOffset = 0;
+
+      // 점수가 0이므로 속도도 120px/초로 초기화됩니다.
+      updateSpeed();
+      updateScoreDisplay();
+      updatePlayerPosition();
+      renderRoad();
+
+      finalScoreText.textContent = "최종 점수: 0";
+    }
+
+    function startGame() {
+      // 진행 중 또는 충돌 연출 중에는 중복 시작을 막습니다.
+      if (gameState === "playing" || gameState === "crashing") {
+        return;
+      }
+
+      resetGame();
+
+      gameState = "playing";
+      startScreen.hidden = true;
+      gameOverMessage.hidden = true;
+
+      startButton.disabled = true;
+      restartButton.disabled = true;
+
+      game.focus({ preventScroll: true });
+      animationId = requestAnimationFrame(gameLoop);
+    }
+
+    function renderRoad() {
+      for (const line of laneLines) {
+        line.style.backgroundPositionY = `${roadOffset}px`;
+      }
+    }
+
+    function updateRoad(deltaTime) {
+      if (gameState !== "playing") return;
+
+      // 다른 차량과 같은 현재 속도로 도로를 움직입니다.
+      roadOffset =
+        (roadOffset + currentSpeed * deltaTime) % roadPatternHeight;
+
+      renderRoad();
+    }
+
+    // 5점마다 20px/초씩 증가시키고 최대 속도를 제한합니다.
+    function updateSpeed() {
+      const level = Math.floor(score / pointsPerLevel);
+
+      currentSpeed = Math.min(
+        maxSpeed,
+        baseSpeed + level * speedIncrease
+      );
+    }
+
+    function updateScoreDisplay() {
+      scoreBoard.textContent = `점수: ${score}`;
+    }
+
+    function addScore() {
+      if (gameState !== "playing") return;
+
+      score += 1;
+
+      // 점수를 얻을 때마다 현재 속도를 다시 계산합니다.
+      updateSpeed();
+      updateScoreDisplay();
+    }
+
+    function updatePlayerPosition() {
+      const laneWidth = game.clientWidth / laneCount;
+      const centerX = laneWidth * (currentLane + 0.5);
+      player.style.left = `${centerX}px`;
+    }
+
+    function handleKeyDown(event) {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (gameState !== "playing" || event.repeat) {
+        return;
+      }
+
+      // 차선 번호를 0~2로 제한합니다.
+      if (event.key === "ArrowLeft") {
+        currentLane = Math.max(0, currentLane - 1);
+      } else {
+        currentLane = Math.min(laneCount - 1, currentLane + 1);
+      }
+
+      updatePlayerPosition();
+      checkCollisions();
+    }
+
+    function isColliding(first, second) {
+      const a = first.getBoundingClientRect();
+      const b = second.getBoundingClientRect();
+
+      return (
+        a.left < b.right &&
+        a.right > b.left &&
+        a.top < b.bottom &&
+        a.bottom > b.top
+      );
+    }
+
+    function checkCollisions() {
+      if (gameState !== "playing") return;
+
+      for (const enemy of enemies) {
+        if (isColliding(player, enemy.element)) {
+          startCrashEffect();
+          return;
+        }
+      }
+    }
+
+    function clearCrashEffect() {
+      if (crashTimerId !== null) {
+        clearTimeout(crashTimerId);
+        crashTimerId = null;
+      }
+
+      game.classList.remove("is-crashing");
+      player.classList.remove("is-hit");
+    }
+
+    function startCrashEffect() {
+      if (gameState !== "playing") return;
+
+      // 충돌 즉시 조작·차량·도로·점수 계산을 멈춥니다.
+      gameState = "crashing";
+
+      if (animationId !== null) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+
+      clearCrashEffect();
+
+      startButton.disabled = true;
+      restartButton.disabled = true;
+      gameOverMessage.hidden = true;
+
+      game.classList.add("is-crashing");
+      player.classList.add("is-hit");
+
+      crashTimerId = setTimeout(() => {
+        crashTimerId = null;
+        endGame();
+      }, crashDuration);
+    }
+
+    function endGame() {
+      if (gameState !== "crashing") return;
+
+      clearCrashEffect();
+      gameState = "gameover";
+
+      finalScoreText.textContent = `최종 점수: ${score}`;
+      gameOverMessage.hidden = false;
+      restartButton.disabled = false;
+
+      restartButton.focus({ preventScroll: true });
+    }
+
+    // 새 차량과 기존 차량 사이의 실제 세로 거리를 확인합니다.
+    function canSpawnEnemy() {
+      if (enemies.length === 0) return true;
+
+      const spawnY = -enemyHeight;
+
+      return enemies.every(
+        enemy => enemy.y - spawnY >= minSpawnDistance
+      );
+    }
+
+    function createEnemy() {
+      // 공간이 부족하면 생성을 잠시 늦춥니다.
+      if (gameState !== "playing" || !canSpawnEnemy()) {
+        return false;
+      }
+
+      const lane = Math.floor(Math.random() * laneCount);
+      const laneWidth = game.clientWidth / laneCount;
+      const element = enemyTemplate.content.firstElementChild.cloneNode(true);
+
+      const enemy = {
+        element: element,
+        y: -enemyHeight
+      };
+
+      element.style.left = `${laneWidth * (lane + 0.5)}px`;
+      element.style.top = `${enemy.y}px`;
+
+      game.appendChild(element);
+      enemies.push(enemy);
+
+      return true;
+    }
+
+    function updateEnemies(deltaTime) {
+      if (gameState !== "playing") return;
+
+      // 기존 차량도 모두 같은 현재 속도로 이동합니다.
+      for (const enemy of enemies) {
+        enemy.y += currentSpeed * deltaTime;
+        enemy.element.style.top = `${enemy.y}px`;
+      }
+
+      // 점수 계산보다 먼저 충돌을 검사합니다.
+      checkCollisions();
+      if (gameState !== "playing") return;
+
+      for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+
+        if (enemy.y >= game.clientHeight) {
+          addScore();
+
+          // 즉시 제거하여 같은 차량의 중복 득점을 막습니다.
+          enemy.element.remove();
+          enemies.splice(i, 1);
+        }
+      }
+    }
+
+    function gameLoop(currentTime) {
+      if (gameState !== "playing") return;
+
+      if (previousTime === null) {
+        previousTime = currentTime;
+      }
+
+      const deltaTime = (currentTime - previousTime) / 1000;
+      previousTime = currentTime;
+
+      updateRoad(deltaTime);
+      updateEnemies(deltaTime);
+
+      if (gameState !== "playing") return;
+
+      spawnElapsed += deltaTime;
+
+      // 3초가 지나고 안전거리도 충분할 때 한 대만 생성합니다.
+      // 지연된 요청을 여러 대씩 한꺼번에 처리하지 않습니다.
+      if (spawnElapsed >= spawnInterval && createEnemy()) {
+        spawnElapsed = 0;
+      }
+
+      animationId = requestAnimationFrame(gameLoop);
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      previousTime = null;
+    });
+
+    game.style.setProperty("--crash-duration", `${crashDuration}ms`);
+
+    // 이벤트는 처음 한 번만 등록합니다.
+    window.addEventListener("keydown", handleKeyDown);
+    startButton.addEventListener("click", startGame);
+    restartButton.addEventListener("click", startGame);
+
+    updatePlayerPosition();
+    updateScoreDisplay();
+    renderRoad();
+  </script>
+</body>
+</html>
